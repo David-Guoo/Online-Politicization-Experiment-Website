@@ -78,7 +78,7 @@ const phase_1_liberal = [//这是phaseI对应每个问题在piolt1中抽取的�
 
     [1, 0, 1, 0, 1, 0, 1, 0, 0, 1],[0, 0, 1, 0, 1, 1, 1, 0, 0, 1],[0, 0, 1, 0, 1, 0, 1, 1, 0, 1],
 
-[0, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+[0, 0, 1, 0, 1, 0, 1, 0, 0, 1],
 [0, 0, 1, 0, 1, 0, 1, 0, 0, 1],
 [0, 0, 1, 0, 1, 0, 1, 0, 0, 1],
 [0, 0, 1, 0, 1, 0, 1, 0, 0, 1]
@@ -90,16 +90,22 @@ const time_configurations = {
     'phase_3_question': [7, 11],//对phaseII的问题回答
     'preference': [0, 0],//偏好类的问题这是phaseII里面对四种不同类的问题的时间设定，20240517从1，4变成0，0
     'issue': 5,//政治类的问题10个，phaseI.这里是agree&disagree类型的问题,政治类。
-    'lag': 1,//用在每次确认回答的OK上的延时，1秒钟
+    // 'lag': 1,//用在每次确认回答的OK上的延时，1秒钟
     'confirm': [10, 10],
 };
 //定义了各种时间配置，如测试时间、等待时间、阶段3问题时间等
 
+// const style_configurations = {
+//     'finish_opacity': 0.2,
+//     'clicked_choice_background_color': 'grey',
+//     'disagree': 'Disagree ⇩',
+//     'agree': 'Agree ⇧',
+// };
 const style_configurations = {
     'finish_opacity': 0.2,
     'clicked_choice_background_color': 'grey',
-    'disagree': 'Disagree ⇩',
-    'agree': 'Agree ⇧',
+    'disagree': 'Disagree X',
+    'agree': 'Agree √',
 };
 //一个对象，定义了样式配置，如完成后的透明度、点击选择后的背景颜色，以及不同意和同意的文本标签
 
@@ -125,7 +131,9 @@ var data = {//这些数据将会记录在数据库中
     type_A_answers: [],         // ideological questions in phase I
     type_B_answers: [],         // non-ideological questions in phase II
     type_D_answers: [],         // post-quiz questions，存拖动轴的数值
-    reason: ""
+    reason: "",
+    driven_answers: [],
+    trust_answers: [],
 };
 ///////////////////////////////////////////////////////////////////
 let firstBotIndex = (human_index == 0) ? 1 : 0;
@@ -179,13 +187,14 @@ attention_checked
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 let split_answers = [[]];
+window.split_answers = [[]];
 let num1 = [];let num2 = [];
 
 
 
 function enter_next() {
     // attention check
-    if (phase == 3 && question_seqNum_in_phase == 2 && !attention_checked) {
+    if (phase == 3 && question_seqNum_in_phase == 1 && !attention_checked) {
         attention_check(); // 这里原有的逻辑
         attention_checked = true;
         return;
@@ -279,6 +288,10 @@ function enter_next() {
         do {
             num2 = Math.floor(Math.random() * 6);
         } while (num2 === num1);
+
+        // 将结果存储到全局变量 window.split_answers
+        window.split_answers = split_answers;
+        document.dispatchEvent(new Event('splitAnswersReady'));
     }
 
     // restore status
@@ -695,22 +708,23 @@ function init_phase_1() {
         else
             statement_text = phase_1_statements[1][index_of_question - phase_1_statements[0].length].statement;
         document.querySelector(".statement").innerHTML = `"` + statement_text + `"`;
+        add_ans_choices(['Agree √', 'Disagree X']);
         //设置问题的内容，并从 phase_1_statements 数组中获取对应的声明文本。
         //这个数组可能包含两组不同的声明，根据 index_of_question 的值，从其中一组或另一组中选择声明。
-        const answer_choices = document.querySelector(".answer_choices");
-        answer_choices.innerHTML += `
-            <div class="answer_choice" id="choice_0">
-                <p>Agree</p>
-                ${up_arrow_svg}
-            </div>
-            <div class="answer_choice" id="choice_1">
-                <p>Disagree</p>
-                ${down_arrow_svg}
-            </div?
-        `;
-        answer_choices.querySelectorAll(".arrow").forEach((arrow) => {
-            arrow.classList.add("arrow-option")
-        })
+        // const answer_choices = document.querySelector(".answer_choices");
+        // answer_choices.innerHTML += `
+        //     <div class="answer_choice" id="choice_0">
+        //         <p>Agree</p>
+        //         ${up_arrow_svg}
+        //     </div>
+        //     <div class="answer_choice" id="choice_1">
+        //         <p>Disagree</p>
+        //         ${down_arrow_svg}
+        //     </div?
+        // `;
+        // answer_choices.querySelectorAll(".arrow").forEach((arrow) => {
+        //     arrow.classList.add("arrow-option")
+        // })
 
         // for the ith question, pretend that the last participant is offline for some time
         if (question_seqNum_in_phase == phase_1_special_question_index) {
@@ -834,6 +848,9 @@ function init_phase_2() {
     const range = document.querySelector('.custom-range');
     let isDragging = [false, false, false];
     let marker_dragged = [false, false, false];
+    let trust_answers_filled = [false, false];
+
+    data.trust_answers = [null, null];
 
     for (let marker_idx = 0; marker_idx < 3; marker_idx++) {
         const marker = document.getElementById(`marker_${marker_idx}`);
@@ -849,12 +866,12 @@ function init_phase_2() {
     });
 
     document.addEventListener('mousemove', (event) => {
-        const segment_percentage = 4.76;
+        const segment_percentage = 7.69;
         let range_idx = -1;
         for (let idx = 0; idx < 3; idx++) {
             if (isDragging[idx]) {
                 range_idx = idx;
-                break; 
+                break;
             }
         }
         if (range_idx >= 0) {
@@ -864,53 +881,352 @@ function init_phase_2() {
             x = Math.min(x, rect.width);
             const percentage = (x / rect.width) * 100;
             let segmentIndex = Math.floor(percentage / segment_percentage);
-            segmentIndex = Math.min(segmentIndex, 20);
+            segmentIndex = Math.min(segmentIndex, 12);
             const marker = document.getElementById(`marker_${range_idx}`);
-            marker.style.left = `${50 + (segmentIndex - 10) * segment_percentage}%`;
+            marker.style.left = `${50 + (segmentIndex - 6) * segment_percentage}%`;
             const color = getComputedStyle(document.documentElement).getPropertyValue(`--color${segmentIndex}`);
             marker.style.backgroundColor = color;
             // document.getElementById(`name_${range_idx}`).style.border = `2px solid ${color}`;
             marker_dragged[range_idx] = true;
-            split_answers[0][range_idx] = (segmentIndex - 10) / 5;
-            if (marker_dragged[0] && marker_dragged[1] && marker_dragged[2]) {
-                const button = document.querySelector("button")
-                button.disabled = false;
-                button.addEventListener("click", enter_next);
-            }
+            split_answers[0][range_idx] = (segmentIndex - 6) / 3;
+
+            checkIfAllConditionsMet(marker_dragged, trust_answers_filled);
         }
     });
+
+    const inputs = document.querySelectorAll('input[type="radio"]');
+    inputs.forEach(input => {
+        input.addEventListener('change', () => {
+            if (input.name == "detection_5") {
+                data.trust_answers[0] = parseInt(input.value);
+                trust_answers_filled[0] = true;
+            } else if (input.name == "detection_6") {
+                data.trust_answers[1] = parseInt(input.value);
+                trust_answers_filled[1] = true;
+            }
+
+            checkIfAllConditionsMet(marker_dragged, trust_answers_filled);
+        });
+    });
 }
+
+// 检查是否所有条件都满足，如果满足则启用按钮
+function checkIfAllConditionsMet(marker_dragged, trust_answers_filled) {
+    const button = document.querySelector(".button_big");
+    if (marker_dragged.every(Boolean) && trust_answers_filled.every(Boolean)) {
+        button.disabled = false;
+        button.addEventListener("click", enter_next);
+    }
+}
+
+
 
 
 
 var evaluation_types = [];
 
+// 全局变量标志
+let phase4DataReady = false;
+
+document.addEventListener('splitAnswersReady', function() {
+    console.log(window.split_answers); // 这时 split_answers 已经初始化，应该能正确打印
+
+    let dot_pos_1 = (window.split_answers[0][0] + 2) / 4;
+    let dot_pos_3 = (window.split_answers[0][2] + 2) / 4;
+
+    const color_0 = interpolateColor(dot_pos_1);
+    const color_2 = interpolateColor(dot_pos_3);
+
+    function getIdeologyLabel(color) {
+        switch (color.toLowerCase()) {
+            case 'rgb(19, 59, 255)':
+            case 'rgb(55, 89, 252)':
+                return 'strongly liberal';
+            case 'rgb(92, 118, 249)':
+            case 'rgb(128, 148, 246)':
+                return 'liberal';
+            case 'rgb(164, 178, 243)':
+            case 'rgb(201, 207, 240)':
+                return 'mildly liberal';
+            case '#ededed':
+                return 'neutral';
+            case 'rgb(240, 206, 201)':
+            case 'rgb(243, 175, 166)':
+                return 'mildly conservative';
+            case 'rgb(246, 144, 130)':
+            case 'rgb(249, 113, 94)':
+                return 'conservative';
+            case 'rgb(252, 82, 59)':
+            case 'rgb(255, 51, 23)':
+                return 'strongly conservative';
+            default:
+                return 'unknown';  // 处理未知颜色的情况
+        }
+    }
+
+    const label_0 = getIdeologyLabel(color_0);
+    const label_2 = getIdeologyLabel(color_2);
+
+    // 动态创建 phase_4_body_string 并存储
+    window.phase_4_body_string = `
+        <h1>Additional questions</h1>
+        <p>
+            Now you have completed the main part of this survey experiment. Before you are redirected to the Connect platform, we would like to ask you some additional questions. Your answers will <b>NOT</b> be disclosed to the other two participants. After answering these questions, please click “Submit”. Then you will be directed to the last page of this survey.
+        </p>
+        <hr>
+        <div class="question_phase_4" id="question_4">
+            <p>Q1. In phase 2, to what extent were your answers influenced by ${pseudonyms_chosen[0]} group's (${label_0}) answers?</p>
+            <div class="detection_wrap">
+                <div class="each_detection">
+                    <form>
+                        <input type="radio" id="detection_2_0" value="0" name="detection_2">
+                        <label for="detection_2_0">Strongly influenced</label>
+                        <br>
+                        <input type="radio" id="detection_2_1" value="1" name="detection_2">
+                        <label for="detection_2_1">Somewhat influenced</label>
+                        <br>
+                        <input type="radio" id="detection_2_2" value="2" name="detection_2">
+                        <label for="detection_2_2">Not influenced at all</label>
+                        <br>
+                    </form>
+                </div class="each_detection">
+            </div>
+        </div>
+        
+        <div class="question_phase_4" id="question_5">
+            <p>Q2. In phase 2, to what extent were your answers influenced by ${pseudonyms_chosen[2]} group's (${label_2}) answers?</p>
+            <div class="detection_wrap">
+                <div class="each_detection">
+                    <form>
+                        <input type="radio" id="detection_3_0" value="0" name="detection_3">
+                        <label for="detection_3_0">Strongly influenced</label>
+                        <br>
+                        <input type="radio" id="detection_3_1" value="1" name="detection_3">
+                        <label for="detection_3_1">Somewhat influenced</label>
+                        <br>
+                        <input type="radio" id="detection_3_2" value="2" name="detection_3">
+                        <label for="detection_3_2">Not influenced at all</label>
+                        <br>
+                    </form>
+                </div class="each_detection">
+            </div>
+        </div>
+        
+        <div class="question_phase_4" id="question_6">
+            <p>Q3. How important is ideology in forming your opinions on public issues?</p>
+            <div class="detection_wrap">
+                <div class="each_detection">
+                    <form>
+                        <input type="radio" id="detection_4_0" value="0" name="detection_4">
+                        <label for="detection_4_0">Very important</label>
+                        <br>
+                        <input type="radio" id="detection_4_1" value="1" name="detection_4">
+                        <label for="detection_4_1">Moderately important</label>
+                        <br>
+                        <input type="radio" id="detection_4_2" value="2" name="detection_4">
+                        <label for="detection_4_2">Not important at all</label>
+                        <br>
+                    </form>
+                </div class="each_detection">
+            </div>
+        </div>
+        
+        <button type="button" class="button_big" disabled="true">Submit</button>
+    `;
+
+    // 标志 phase 4 数据准备就绪
+    phase4DataReady = true;
+});
+
+// 在需要时调用 init_phase_4
 function init_phase_4() {
+    if (!phase4DataReady) {
+        console.error("Phase 4 data is not ready yet.");
+        return;
+    }
+
     if (userData.quiz_type == "pilot_1")
         evaluation_types = ['ideology', 'competence', 'warmth'];
     else if (userData.quiz_type == 'condition_1' || userData.quiz_type == 'condition_2' || userData.quiz_type == 'condition_3')
         evaluation_types = ['ideology'];
+
     const body = document.querySelector(".quiz_body");
-    body.innerHTML = phase_4_body_string;
-    // document.querySelectorAll("input[type=range]").forEach((input) => {
-    //     input.addEventListener('input', display_values);
-    // });
+    body.innerHTML = window.phase_4_body_string;
+
     const inputs = document.querySelectorAll('input[type="radio"]');
     const button = document.querySelector('.button_big');
-    data.type_D_answers = [null, null];
+    data.type_D_answers = [null, null, null];
     inputs.forEach(input => {
         input.addEventListener('change', () => {
-            if (input.name == "detection_2")
+            if (input.name == "detection_2") {
                 data.type_D_answers[0] = parseInt(input.value);
-            else
+            } else if (input.name == "detection_3") {
                 data.type_D_answers[1] = parseInt(input.value);
-            if (data.type_D_answers[0] !== null && data.type_D_answers[1] !== null) {
+            } else if (input.name == "detection_4") {
+                data.type_D_answers[2] = parseInt(input.value);
+            }
+
+            if (data.type_D_answers[0] !== null &&
+                data.type_D_answers[1] !== null &&
+                data.type_D_answers[2] !== null) {
                 button.disabled = false;
             }
         });
     });
     document.querySelector("button").addEventListener("click", enter_next);
 }
+
+// document.addEventListener('splitAnswersReady', function() {
+//     console.log(window.split_answers); // 这时 split_answers 已经初始化，应该能正确打印
+//
+//     let dot_pos_1 = (window.split_answers[0][0] + 2) / 4;
+//     let dot_pos_3 = (window.split_answers[0][2] + 2) / 4;
+//
+//     const color_0 = interpolateColor(dot_pos_1);
+//     const color_2 = interpolateColor(dot_pos_3);
+//
+//     function getIdeologyLabel(color) {
+//         switch (color.toLowerCase()) {
+//             case 'rgb(19, 59, 255)':
+//             case 'rgb(55, 89, 252)':
+//                 return 'strongly liberal';
+//             case 'rgb(92, 118, 249)':
+//             case 'rgb(128, 148, 246)':
+//                 return 'liberal';
+//             case 'rgb(164, 178, 243)':
+//             case 'rgb(201, 207, 240)':
+//                 return 'mildly liberal';
+//             case '#ededed':
+//                 return 'neutral';
+//             case 'rgb(240, 206, 201)':
+//             case 'rgb(243, 175, 166)':
+//                 return 'mildly conservative';
+//             case 'rgb(246, 144, 130)':
+//             case 'rgb(249, 113, 94)':
+//                 return 'conservative';
+//             case 'rgb(252, 82, 59)':
+//             case 'rgb(255, 51, 23)':
+//                 return 'strongly conservative';
+//             default:
+//                 return 'unknown';  // 处理未知颜色的情况
+//         }
+//     }
+//
+//     const label_0 = getIdeologyLabel(color_0);
+//     const label_2 = getIdeologyLabel(color_2);
+//     // 在这里继续使用 label_0 和 label_2 进行后续操作
+// });
+//
+// const phase_4_body_string = `
+//         <h1>Additional questions</h1>
+//         <p>
+//             Now you have completed the main part of this survey experiment. Before you are redirected to the Connect platform, we would like to ask you some additional questions. Your answers will <b>NOT</b> be disclosed to the other two participants. After answering these questions, please click “Submit”. Then you will be directed to the last page of this survey.
+//         </p>
+//         <hr>
+//         <!--<div class="question_phase_4" id="question_1">
+//             <p>Q. Based on previous answers in Phase I, please choose the ideology of yourself and the other participants.</p>
+//             <div id="evaluation_ideology" class="evaluation"></div>
+//         </div>
+//
+//         <div class="pilot_1_additional_questions">
+//             <div class="question_phase_4" id="question_2">
+//                 <p>Q. How competent do you think the other participants are?
+//                 <div id="evaluation_competence" class="evaluation"></div>
+//             </div>
+//             <div class="question_phase_4" id="question_3">
+//                 <p>Q. Do you think the other participants would be friendly to you?
+//                 <div id="evaluation_warmth" class="evaluation"></div>
+//             </div>
+//         </div>  注释了文字显示部分-->
+//
+//
+//
+//     <div class="question_phase_4" id="question_4">
+//         <p>Q1. In phase 2, to what extent were your answers influenced by ${pseudonyms_chosen[0]} group's (${label_0}) answers?</p>
+//         <div class="detection_wrap">
+//             <div class="each_detection">
+//                 <form>
+//                     <input type="radio" id="detection_2_0" value="0" name="detection_2">
+//                     <label for="detection_2_0">Strongly influenced</label>
+//                     <br>
+//                     <input type="radio" id="detection_2_1" value="1" name="detection_2">
+//                     <label for="detection_2_1">Somewhat influenced</label>
+//                     <br>
+//                     <input type="radio" id="detection_2_2" value="2" name="detection_2">
+//                     <label for="detection_2_2">Not influenced at all</label>
+//                     <br>
+//                 </form>
+//             </div class="each_detection">
+//         </div>
+//     </div>
+//
+//     <div class="question_phase_4" id="question_5">
+//         <p>Q2. In phase 2, to what extent were your answers influenced by ${pseudonyms_chosen[2]} group's (${label_2}) answers?</p>
+//         <div class="detection_wrap">
+//             <div class="each_detection">
+//                 <form>
+//                     <input type="radio" id="detection_3_0" value="0" name="detection_3">
+//                     <label for="detection_3_0">Strongly influenced</label>
+//                     <br>
+//                     <input type="radio" id="detection_3_1" value="1" name="detection_3">
+//                     <label for="detection_3_1">Somewhat influenced</label>
+//                     <br>
+//                     <input type="radio" id="detection_3_2" value="2" name="detection_3">
+//                     <label for="detection_3_2">Not influenced at all</label>
+//                     <br>
+//                 </form>
+//             </div class="each_detection">
+//         </div>
+//     </div>
+//
+//     <div class="question_phase_4" id="question_6">
+//         <p>Q3. How important is ideology in forming your opinions on public issues?</p>
+//         <div class="detection_wrap">
+//             <div class="each_detection">
+//                 <form>
+//                     <input type="radio" id="detection_4_0" value="0" name="detection_4">
+//                     <label for="detection_4_0">Very important</label>
+//                     <br>
+//                     <input type="radio" id="detection_4_1" value="1" name="detection_4">
+//                     <label for="detection_4_1">Moderately important</label>
+//                     <br>
+//                     <input type="radio" id="detection_4_2" value="2" name="detection_4">
+//                     <label for="detection_4_2">Not important at all</label>
+//                     <br>
+//                 </form>
+//             </div class="each_detection">
+//         </div>
+//     </div>
+//
+//     <button type="button" class="button_big" disabled="true">Submit</button>
+//     `;
+//
+// function init_phase_4() {
+//     if (userData.quiz_type == "pilot_1")
+//         evaluation_types = ['ideology', 'competence', 'warmth'];
+//     else if (userData.quiz_type == 'condition_1' || userData.quiz_type == 'condition_2' || userData.quiz_type == 'condition_3')
+//         evaluation_types = ['ideology'];
+//     const body = document.querySelector(".quiz_body");
+//     body.innerHTML = phase_4_body_string;
+//     // document.querySelectorAll("input[type=range]").forEach((input) => {
+//     //     input.addEventListener('input', display_values);
+//     // });
+//     const inputs = document.querySelectorAll('input[type="radio"]');
+//     const button = document.querySelector('.button_big');
+//     data.type_D_answers = [null, null];
+//     inputs.forEach(input => {
+//         input.addEventListener('change', () => {
+//             if (input.name == "detection_2")
+//                 data.type_D_answers[0] = parseInt(input.value);
+//             else
+//                 data.type_D_answers[1] = parseInt(input.value);
+//             if (data.type_D_answers[0] !== null && data.type_D_answers[1] !== null) {
+//                 button.disabled = false;
+//             }
+//         });
+//     });
+//     document.querySelector("button").addEventListener("click", enter_next);
+// }
 
 
 
@@ -931,11 +1247,13 @@ function all_finish_answering() {
         `;//这一行更新了页面上具有类名 instruction 的元素的内部 HTML。它提示用户检查他们的答案，并在完成后点击一个“OK”按钮。
         display_values();
         document.querySelector("button").addEventListener('click', enter_next);//给页面上的第一个 button 元素添加了一个点击事件监听器。当用户点击这个按钮时，会调用 enter_next 函数。
+    },);
+}
         //从函数名可以推测，这可能是进入下一个阶段或进行下一步操作的函数
-    }, time_configurations['lag'] * 1000);//lag对应数值是1，所以是延时了1秒钟来完成检查和确认的提示
+    //lag对应数值是1，所以是延时了1秒钟来完成检查和确认的提示
     //使用 setTimeout 设置了一个延迟执行的操作。这个延迟的时间由 time_configurations['lag'] 的值乘以 1000（转换为毫秒）决定。
     //在延迟结束后，会执行提供的箭头函数
-}
+
 
 
 
